@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./logs:/app/logs
+      - ./storage:/app/storage
+      - ./models:/app/models
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MODEL_PATH=/app/models/generator.pth
+      - STORAGE_PATH=/app/storage
+    depends_on:
+      - redis
+
+  worker:
+    build: .
+    command: celery -A app.workers.celery_app worker --loglevel=info
+    volumes:
+      - ./logs:/app/logs
+      - ./storage:/app/storage
+      - ./models:/app/models
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MODEL_PATH=/app/models/generator.pth
+      - STORAGE_PATH=/app/storage
+    depends_on:
+      - redis
+      - api
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

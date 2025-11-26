@@ -1,0 +1,58 @@
+# -------------------------------------------------
+# 1️⃣  Python / backend
+# -------------------------------------------------
+# Virtual‑envs – you already have a .venv folder
+.venv/
+env/
+backend/.venv/
+# Byte‑code / caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+# Distribution / packaging artefacts
+build/
+dist/
+*.egg-info/
+*.egg
+# Large model files – keep them out of the repo
+# (replace `models/` with the exact folder that holds .pth/.ckpt files)
+backend/models/
+# Optional: if you store any dataset or large binaries in a folder called `data/`
+backend/data/
+# Logs
+*.log
+
+# -------------------------------------------------
+# 2️⃣  Node / frontend
+# -------------------------------------------------
+node_modules/
+# Build artefacts (Next.js/Vite)
+.next/
+dist/
+# Optional: local test coverage reports
+coverage/
+# Optional: storybook static build
+storybook-static/
+
+# -------------------------------------------------
+# 3️⃣  IDE / editor artefacts
+# -------------------------------------------------
+.vscode/
+*.code-workspace
+# OS‑specific files
+.DS_Store
+Thumbs.db
+
+# -------------------------------------------------
+# 4️⃣  Secrets / environment files
+# -------------------------------------------------
+.env
+.env.*          # any env‑file variants (e.g. .env.local)
+
+# -------------------------------------------------
+# 5️⃣  Miscellaneous
+# -------------------------------------------------
+# If you ever generate large temporary files
+*.tmp
+*.bak
