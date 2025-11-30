@@ -1,7 +1,9 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
+import torch
 from fastapi.responses import Response
 from ..schemas import EnhancementResponse
-from ..inference import run_inference
+from ..schemas import EnhancementResponse
+from ..inference import run_inference, run_img2img_turbo
 from ..utils import logger
 from ..config import settings
 from ..workers.tasks import enhance_image_task
@@ -11,7 +13,15 @@ import base64
 router = APIRouter()
 
 @router.post("/enhance", summary="Enhance an image synchronously")
-async def enhance_image(file: UploadFile = File(...)):
+async def enhance_image(
+    file: UploadFile = File(...),
+    model: str = Form("raunenet"),
+    prompt: str = Form(None),
+    steps: int = Form(20),
+    cfg: float = Form(7.5),
+    skip_canny: bool = Form(False),
+    gamma: float = Form(0.4)
+):
     """
     Upload an underwater image and get the enhanced version back immediately.
     """
@@ -26,9 +36,60 @@ async def enhance_image(file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="File too large")
     
     try:
-        print("🔍 enhance_image endpoint called!")
-        logger.info(f"Processing image: {file.filename}")
-        enhanced_bytes, metadata = run_inference(contents)
+        print(f"🔍 enhance_image endpoint called with model: {model}")
+        print(f"📝 Prompt: {prompt}, Skip Canny: {skip_canny}")
+        logger.info(f"Processing image: {file.filename} with model: {model}")
+        
+        if model == "img2img_turbo" or model == "sketch_turbo_stochastic":
+            logger.info(f"Taking img2img_turbo path ({model})")
+            if not prompt:
+                print("❌ Prompt missing for img2img_turbo")
+                raise HTTPException(status_code=400, detail="Prompt is required for Transfiguration (Turbo)")
+            
+            # Map model name to internal type
+            model_type = "sketch_to_image_stochastic" if model == "sketch_turbo_stochastic" else "edge_to_image"
+            
+            enhanced_bytes = run_img2img_turbo(
+                contents, 
+                prompt, 
+                steps=steps, 
+                cfg=cfg, 
+                skip_canny=skip_canny,
+                model_type=model_type,
+                gamma=gamma
+            )
+            metadata = {
+                "model_type": "Img2ImgTurbo",
+                "device": "cuda" if torch.cuda.is_available() else "cpu",
+                "input_shape": "dynamic",
+                "execution_status": "success"
+            }
+        elif model == "controlnet":
+            logger.info("Taking ControlNet path")
+            if not prompt:
+                raise HTTPException(status_code=400, detail="Prompt is required for ControlNet")
+            
+            from ..controlnet import controlnet_service
+            # controlnet_service is a singleton, but we ensure it's loaded via model_loader conceptually or directly here
+            # Ideally we should use model_loader to get it, but for simplicity we import the singleton
+            # However, to respect the lazy loading pattern in model_loader, let's trigger it there first
+            # But since we are inside the route, we can just use the service directly if it handles its own loading (which it does)
+            
+            enhanced_bytes = controlnet_service.process_image(
+                contents,
+                prompt,
+                steps=steps,
+                controlnet_conditioning_scale=gamma # Reusing gamma as conditioning scale for simplicity in UI
+            )
+            metadata = {
+                "model_type": "ControlNet",
+                "device": "cuda" if torch.cuda.is_available() else "cpu",
+                "input_shape": "dynamic",
+                "execution_status": "success"
+            }
+        else:
+            logger.info(f"Taking standard inference path for model: {model}")
+            enhanced_bytes, metadata = run_inference(contents, model_name=model)
         
         # Add metadata to headers (must be strings)
         headers = {
@@ -45,7 +106,10 @@ async def enhance_image(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/enhance-async", summary="Enhance an image asynchronously")
-async def enhance_image_async(file: UploadFile = File(...)):
+async def enhance_image_async(
+    file: UploadFile = File(...),
+    model: str = Form("raunenet")
+):
     """
     Upload an image and get a job ID for background processing.
     """
@@ -62,7 +126,7 @@ async def enhance_image_async(file: UploadFile = File(...)):
         image_b64 = base64.b64encode(contents).decode("utf-8")
         
         # Trigger Celery task
-        task = enhance_image_task.delay(image_b64, file.filename)
+        task = enhance_image_task.delay(image_b64, file.filename, model_name=model)
         
         return {"job_id": task.id, "status": "submitted"}
         

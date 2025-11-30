@@ -5,7 +5,7 @@ import os
 import base64
 
 @celery_app.task(bind=True, name="enhance_image_task")
-def enhance_image_task(self, image_data_b64: str, filename: str):
+def enhance_image_task(self, image_data_b64: str, filename: str, model_name: str = 'raunenet'):
     """
     Celery task to enhance an image in the background.
     """
@@ -14,7 +14,7 @@ def enhance_image_task(self, image_data_b64: str, filename: str):
         image_bytes = base64.b64decode(image_data_b64)
         
         # Run inference
-        enhanced_bytes = run_inference(image_bytes)
+        enhanced_bytes, _ = run_inference(image_bytes, model_name=model_name)
         
         # Save to storage
         output_filename = f"enhanced_{self.request.id}_{filename}"

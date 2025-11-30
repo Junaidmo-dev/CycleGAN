@@ -13,3 +13,14 @@ python-dotenv==1.0.0
 pytest==7.4.4
 httpx==0.26.0
 numpy==1.26.4
+ultralytics
+tqdm
+transformers
+diffusers
+accelerate
+peft
+open-clip-torch
+timm
+lpips
+dominate
+opencv-python

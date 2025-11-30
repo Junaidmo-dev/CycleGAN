@@ -4,7 +4,9 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     APP_NAME: str = "DeepClean AI"
-    API_PREFIX: str = "/api"
+    APP_NAME: str = "DeepClean AI"
+    API_PREFIX: str = "/api/v1"
+    DEBUG: bool = False
     DEBUG: bool = False
     # Server configuration (matches .env)
     HOST: str = "0.0.0.0"
