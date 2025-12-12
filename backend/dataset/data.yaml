@@ -1,0 +1,15 @@
+path: C:/Users/junai/Desktop/Major - Copy/backend/dataset # dataset root dir
+train: images/train # train images (relative to 'path') 
+val: images/train # val images (relative to 'path') - using train for val since we have very little data
+
+# Classes
+names:
+  0: fish
+  1: jellyfish
+  2: shark
+  3: turtle
+  4: whale
+  5: dolphin
+  6: starfish
+  7: stingray
+  8: lionfish

@@ -54,38 +54,4 @@ async def get_models():
     """Return list of available models"""
     return {"models": model_loader.get_available_models()}
 
-@app.get(f"{settings.API_PREFIX}/debug")
-async def debug_import():
-    """Debug endpoint to check imports"""
-    import sys
-    import os
-    import traceback
-    
-    result = {
-        "sys.executable": sys.executable,
-        "cwd": os.getcwd(),
-        "sys.path": sys.path,
-        "import_status": "unknown",
-        "error": None
-    }
-    
-    try:
-        # Re-attempt import logic
-        img2img_base = os.path.join(os.path.dirname(__file__), "..", "img2img_turbo")
-        src_path = os.path.join(img2img_base, "src")
-        
-        # Check if paths exist
-        result["paths_exist"] = {
-            "img2img_base": os.path.exists(img2img_base),
-            "src_path": os.path.exists(src_path)
-        }
-        
-        from src.pix2pix_turbo import Pix2Pix_Turbo
-        result["import_status"] = "success"
-        result["Pix2Pix_Turbo"] = str(Pix2Pix_Turbo)
-    except Exception as e:
-        result["import_status"] = "failed"
-        result["error"] = str(e)
-        result["traceback"] = traceback.format_exc()
-        
-    return result
+

@@ -2,102 +2,136 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 import shutil
 import os
-from ultralytics import YOLO
 from PIL import Image
 import io
-import requests
+import torch
+import time
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from ..utils import logger
 
 router = APIRouter()
 
-# Use YOLO-World (Open Vocabulary Detection)
-# This allows us to detect ANY object by specifying text prompts
-MODEL_NAME = "yolov8x-world.pt"  # Extra Large model for maximum accuracy
+# Moondream 2 Model ID
+MODEL_ID = "vikhyatk/moondream2"
+REVISION = "2024-08-26" 
 
-# Define comprehensive animal classes with descriptive prompts
-ANIMAL_CLASSES = [
-    # Underwater
-    "jellyfish sea animal", "shark", "turtle", "sea turtle", "whale", "dolphin", 
-    "starfish", "crab", "lobster", "octopus", "squid", "seal", "penguin", "ray", 
-    "seahorse", "eel", "coral",
-    
-    # Land
-    "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", 
-    "lion", "tiger", "monkey", "rabbit", "deer", "mule deer", "white-tailed deer", "elk", "moose", "antelope", "fox", "wolf", "kangaroo", 
-    "camel", "hippo", "rhino", "pig", "goat", "snake", "lizard", "frog",
-    
-    # Air
-    "eagle", "parrot", "owl", "duck", "swan", "flamingo", "flying bat"
-]
+model = None
+tokenizer = None
+
+# Version counter for forcing model reload on code changes
+_MODEL_VERSION = 10  # Increment this to force reload
 
 def get_model():
-    """Load YOLO-World model and set custom classes"""
+    """Load Moondream 2 model"""
+    global model, tokenizer
+    
+    # Force reload if code changed
+    if hasattr(get_model, '_loaded_version') and get_model._loaded_version != _MODEL_VERSION:
+        logger.info(f"Code version changed ({get_model._loaded_version} -> {_MODEL_VERSION}), forcing model reload")
+        model = None
+        tokenizer = None
+    
     try:
-        logger.info(f"Loading YOLO-World model: {MODEL_NAME}")
-        model = YOLO(MODEL_NAME)  # Auto-download
-        # Force model onto CPU to avoid device mismatches
-        model.to('cpu')
+        logger.info(f"Loading Moondream 2 model: {MODEL_ID}")
         
-        # Set custom vocabulary for specific animal detection
-        logger.info(f"Setting custom vocabulary with {len(ANIMAL_CLASSES)} animal classes...")
-        model.set_classes(ANIMAL_CLASSES)
-        
-        logger.info("Model loaded successfully.")
-        return model
-    except Exception as e:
-        logger.error(f"Failed to load model: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info(f"Using device: {device}")
 
-# Initialize model on module load (or lazy load)
-# We'll lazy load to avoid startup delay if download is needed, 
-# but for better UX, maybe trigger download on startup? 
-# For now, lazy load in the endpoint or global variable.
-model = None
+        try:
+            # Enable CuDNN benchmark for faster fixed-size input processing
+            if device == "cuda":
+                torch.backends.cudnn.benchmark = True
+                gpu_name = torch.cuda.get_device_name(0)
+                logger.info(f"🚀 GPU OPTIMIZATION ENABLED: Using {gpu_name} with CuDNN Benchmark")
+            
+            logger.info("Creating new model instance...")
+            model = AutoModelForCausalLM.from_pretrained(
+                MODEL_ID, 
+                revision=REVISION,
+                trust_remote_code=True,
+                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+            ).to(device)
+        except Exception as e:
+            logger.warning(f"Error configuring GPU optimizations: {e}")
+
+        if model is None: # If model loading failed in the inner try, re-raise
+            raise Exception("Model failed to load after GPU optimization attempt.")
+
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, revision=REVISION)
+
+        # [FIXED] Transformers downgraded to 4.44.2. No patches needed.
+        # Compatible version handles GenerationMixin and generation_config natively.
+        
+        get_model._loaded_version = _MODEL_VERSION
+        
+        logger.info("Moondream model loaded successfully.")
+        return model, tokenizer
+    except Exception as e:
+        logger.error(f"Failed to load Moondream model: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
 
 @router.post("/detect")
 async def detect_animals(file: UploadFile = File(...)):
-    global model
+    global model, tokenizer
     if model is None:
-        model = get_model()
+        model, tokenizer = get_model()
 
     try:
+        start_time = time.time()
+        
         # Read image
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
+        read_time = time.time()
+        logger.info(f"Image load time: {read_time - start_time:.4f}s")
         
-        # Ensure classes are set (just in case)
-        if hasattr(model, 'set_classes'):
-            model.set_classes(ANIMAL_CLASSES)
-
-        # Run detection with lower confidence
-        results = model(image, conf=0.25)
-
-        detections = []
-        logger.info(f"Processing image... Found {len(results)} result objects")
+        # prompt
+        # prompt
+        # Step 1: Identify Species
+        species_prompt = "What animal or creature is in this image? Provide the specific species name if you can identify it, or the general type of animal. Be concise."
         
-        for result in results:
-            logger.info(f"Result boxes: {len(result.boxes)}")
-            for box in result.boxes:
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                conf = float(box.conf[0])
-                cls = int(box.cls[0])
-                
-                # Handle class names safely
-                if hasattr(model, 'names'):
-                    label = model.names[cls]
-                else:
-                    label = ANIMAL_CLASSES[cls] if cls < len(ANIMAL_CLASSES) else str(cls)
-                
-                logger.info(f"Detected: {label} ({conf:.2f})")
-                
-                detections.append({
-                    "label": label,
-                    "confidence": conf,
-                    "box": [x1, y1, x2, y2]
-                })
+        # Using inference_mode for speed
+        with torch.inference_mode():
+            enc_start = time.time()
+            enc_image = model.encode_image(image)
+            enc_end = time.time()
+            logger.info(f"Encoding time: {enc_end - enc_start:.4f}s")
+            
+            gen_start = time.time()
+            # 1. Get Species
+            species_response = model.answer_question(enc_image, species_prompt, tokenizer)
+            
+            # 2. Get Description
+            desc_prompt = "Describe this animal in detail, including its physical characteristics and habitat."
+            description_response = model.answer_question(enc_image, desc_prompt, tokenizer)
+            
+            gen_end = time.time()
+            logger.info(f"Generation time: {gen_end - gen_start:.4f}s")
 
-        return JSONResponse(content={"detections": detections})
+        logger.info(f"Total processing time: {time.time() - start_time:.4f}s")
+        
+        # Post-processing
+        species = species_response.strip()
+        description = description_response.strip()
+        
+        # Estimate confidence based on specificity
+        confidence = 0.85 if len(species) > 3 and len(species) < 50 else 0.70
+        if "cannot" in species.lower() or "unclear" in species.lower() or "not visible" in species.lower():
+            confidence = 0.0
+            species = "Not detected"
+
+        logger.info(f"Detected: {species} ({confidence})")
+        
+        return JSONResponse(content={
+            "description": description,
+            "species": species,
+            "confidence": confidence,
+            "detections": [] # Keep for compatibility
+        })
 
     except Exception as e:
-        logger.error(f"Detection failed: {e}")
+        logger.error(f"Moondream inference failed: {e}")
+        # Log stack trace for debugging
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))

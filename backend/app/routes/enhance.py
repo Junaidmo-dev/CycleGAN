@@ -3,7 +3,7 @@ import torch
 from fastapi.responses import Response
 from ..schemas import EnhancementResponse
 from ..schemas import EnhancementResponse
-from ..inference import run_inference, run_img2img_turbo
+from ..inference import run_inference
 from ..utils import logger
 from ..config import settings
 from ..workers.tasks import enhance_image_task
@@ -40,31 +40,8 @@ async def enhance_image(
         print(f"📝 Prompt: {prompt}, Skip Canny: {skip_canny}")
         logger.info(f"Processing image: {file.filename} with model: {model}")
         
-        if model == "img2img_turbo" or model == "sketch_turbo_stochastic":
-            logger.info(f"Taking img2img_turbo path ({model})")
-            if not prompt:
-                print("❌ Prompt missing for img2img_turbo")
-                raise HTTPException(status_code=400, detail="Prompt is required for Transfiguration (Turbo)")
-            
-            # Map model name to internal type
-            model_type = "sketch_to_image_stochastic" if model == "sketch_turbo_stochastic" else "edge_to_image"
-            
-            enhanced_bytes = run_img2img_turbo(
-                contents, 
-                prompt, 
-                steps=steps, 
-                cfg=cfg, 
-                skip_canny=skip_canny,
-                model_type=model_type,
-                gamma=gamma
-            )
-            metadata = {
-                "model_type": "Img2ImgTurbo",
-                "device": "cuda" if torch.cuda.is_available() else "cpu",
-                "input_shape": "dynamic",
-                "execution_status": "success"
-            }
-        elif model == "controlnet":
+
+        if model == "controlnet":
             logger.info("Taking ControlNet path")
             if not prompt:
                 raise HTTPException(status_code=400, detail="Prompt is required for ControlNet")

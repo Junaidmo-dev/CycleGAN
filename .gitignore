@@ -18,6 +18,14 @@ dist/
 # Large model files – keep them out of the repo
 # (replace `models/` with the exact folder that holds .pth/.ckpt files)
 backend/models/
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+# YOLO training runs
+runs/
 # Optional: if you store any dataset or large binaries in a folder called `data/`
 backend/data/
 # Logs
