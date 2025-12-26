@@ -1,54 +1,85 @@
 # -------------------------------------------------
 # 1️⃣  Python / backend
 # -------------------------------------------------
-# Virtual‑envs – you already have a .venv folder
+# Virtual‑envs
 .venv/
 env/
+venv/
 backend/.venv/
+ENV/
+
 # Byte‑code / caches
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-# Distribution / packaging artefacts
+.pytest_cache/
+.coverage
+.cache/
+*.cache
+
+# Distribution / packaging artifacts
 build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
+.installed.cfg
 *.egg
+
 # Large model files – keep them out of the repo
-# (replace `models/` with the exact folder that holds .pth/.ckpt files)
 backend/models/
+checkpoints/
 *.pth
 *.pt
 *.ckpt
 *.safetensors
 *.bin
 *.onnx
+*.pkl
+
 # YOLO training runs
 runs/
-# Optional: if you store any dataset or large binaries in a folder called `data/`
+
+# Dataset / Data
+backend/dataset/
 backend/data/
-# Logs
+
+# Logs and Debug
 *.log
+backend/*.txt
+backend/*.jpg
+backend/*.png
+!backend/README.md
+!backend/requirements.txt
 
 # -------------------------------------------------
 # 2️⃣  Node / frontend
 # -------------------------------------------------
 node_modules/
-# Build artefacts (Next.js/Vite)
 .next/
-dist/
+out/
+build/
+
 # Optional: local test coverage reports
 coverage/
-# Optional: storybook static build
-storybook-static/
 
 # -------------------------------------------------
 # 3️⃣  IDE / editor artefacts
 # -------------------------------------------------
 .vscode/
+.idea/
+*.swp
+*.swo
 *.code-workspace
-# OS‑specific files
 .DS_Store
 Thumbs.db
 
@@ -56,11 +87,19 @@ Thumbs.db
 # 4️⃣  Secrets / environment files
 # -------------------------------------------------
 .env
-.env.*          # any env‑file variants (e.g. .env.local)
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*
 
 # -------------------------------------------------
-# 5️⃣  Miscellaneous
+# 5️⃣  Miscellaneous / Archives
 # -------------------------------------------------
-# If you ever generate large temporary files
+*.zip
+*.tar
+*.gz
+*.7z
+*.rar
 *.tmp
 *.bak

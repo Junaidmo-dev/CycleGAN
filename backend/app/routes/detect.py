@@ -19,7 +19,7 @@ model = None
 tokenizer = None
 
 # Version counter for forcing model reload on code changes
-_MODEL_VERSION = 10  # Increment this to force reload
+_MODEL_VERSION = 11  # Increment this to force reload
 
 def get_model():
     """Load Moondream 2 model"""
@@ -58,9 +58,6 @@ def get_model():
             raise Exception("Model failed to load after GPU optimization attempt.")
 
         tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, revision=REVISION)
-
-        # [FIXED] Transformers downgraded to 4.44.2. No patches needed.
-        # Compatible version handles GenerationMixin and generation_config natively.
         
         get_model._loaded_version = _MODEL_VERSION
         
@@ -82,13 +79,15 @@ async def detect_animals(file: UploadFile = File(...)):
         # Read image
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
+        img_width, img_height = image.size
         read_time = time.time()
         logger.info(f"Image load time: {read_time - start_time:.4f}s")
         
-        # prompt
-        # prompt
-        # Step 1: Identify Species
-        species_prompt = "What animal or creature is in this image? Provide the specific species name if you can identify it, or the general type of animal. Be concise."
+        # OPTIMIZED: Single combined prompt for speed with clearer instructions
+        combined_prompt = """Analyze this image and identify the main animal.
+Return the result in this EXACT format:
+SPECIES: <animal name>
+DESCRIPTION: <2 sentences description>"""
         
         # Using inference_mode for speed
         with torch.inference_mode():
@@ -98,21 +97,57 @@ async def detect_animals(file: UploadFile = File(...)):
             logger.info(f"Encoding time: {enc_end - enc_start:.4f}s")
             
             gen_start = time.time()
-            # 1. Get Species
-            species_response = model.answer_question(enc_image, species_prompt, tokenizer)
             
-            # 2. Get Description
-            desc_prompt = "Describe this animal in detail, including its physical characteristics and habitat."
-            description_response = model.answer_question(enc_image, desc_prompt, tokenizer)
+            # Single combined query
+            response = model.answer_question(enc_image, combined_prompt, tokenizer)
             
             gen_end = time.time()
             logger.info(f"Generation time: {gen_end - gen_start:.4f}s")
+            logger.info(f"Raw Model Response: {response}") # Debug logging
 
-        logger.info(f"Total processing time: {time.time() - start_time:.4f}s")
+        total_time = time.time() - start_time
+        logger.info(f"Total processing time: {total_time:.4f}s")
         
-        # Post-processing
-        species = species_response.strip()
-        description = description_response.strip()
+        # Parse combined response with robust fallbacks
+        species = "Unknown"
+        description = response.strip()
+        
+        lines = response.split('\n')
+        
+        # Strategy 1: Look for explicit "SPECIES:" tag
+        for line in lines:
+            if line.upper().startswith("SPECIES:"):
+                species = line.split(":", 1)[1].strip()
+                # Remove any trailing punctuation
+                species = species.rstrip(".,")
+                break
+        
+        # Strategy 2: If no tag, try to extract description from "DESCRIPTION:" tag
+        desc_parts = response.split("DESCRIPTION:")
+        if len(desc_parts) > 1:
+            description = desc_parts[1].strip()
+        
+        # Strategy 3: Heuristic Fallback if SPECIES is still Unknown
+        if species.lower() == "unknown" or species == "":
+            # If the response starts with "This is a [Animal]", extract [Animal]
+            first_sentence = response.split('.')[0].strip()
+            lower_sentence = first_sentence.lower()
+            
+            common_starts = ["this is a ", "this is an ", "a ", "an ", "image of a ", "image of an "]
+            for start in common_starts:
+                if lower_sentence.startswith(start):
+                    # Extract the next 2-3 words as the potential species
+                    rest = first_sentence[len(start):]
+                    words = rest.split()
+                    if words:
+                        # Take up to 3 words (e.g., "Great White Shark")
+                        candidate = " ".join(words[:3]).rstrip(",.")
+                        species = candidate.capitalize()
+                        break
+            
+            # Final fallback: just use the first few words if it looks like a label
+            if species == "Unknown" and len(first_sentence) < 30:
+                 species = first_sentence.rstrip(",.")
         
         # Estimate confidence based on specificity
         confidence = 0.85 if len(species) > 3 and len(species) < 50 else 0.70
@@ -122,11 +157,31 @@ async def detect_animals(file: UploadFile = File(...)):
 
         logger.info(f"Detected: {species} ({confidence})")
         
+        # Create a centered bounding box (since Moondream doesn't provide exact coordinates)
+        # This gives a visual indicator similar to the reference image
+        # Box covers ~70% of image, centered
+        margin_x = int(img_width * 0.15)
+        margin_y = int(img_height * 0.10)
+        
+        detections = []
+        if confidence > 0:
+            detections.append({
+                "label": species,
+                "confidence": confidence,
+                "box": {
+                    "x1": margin_x,
+                    "y1": margin_y,
+                    "x2": img_width - margin_x,
+                    "y2": img_height - margin_y
+                }
+            })
+        
         return JSONResponse(content={
             "description": description,
             "species": species,
             "confidence": confidence,
-            "detections": [] # Keep for compatibility
+            "detections": detections,
+            "processing_time": round(total_time, 2)
         })
 
     except Exception as e:
@@ -135,3 +190,4 @@ async def detect_animals(file: UploadFile = File(...)):
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
