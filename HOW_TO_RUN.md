@@ -45,7 +45,7 @@ celery -A app.workers.celery_app worker --loglevel=info --pool=solo
 **Cause:** Backend API is not responding
 
 **Solution:**
-1. Check if backend is running on port 8000
+1. Check if backend is running on port 8001
 2. Restart the uvicorn server:
    ```powershell
    # Kill existing processes
@@ -54,7 +54,7 @@ celery -A app.workers.celery_app worker --loglevel=info --pool=solo
    # Restart the server
    cd "c:\Users\junai\Desktop\Major - Copy\backend"
    .venv\Scripts\activate
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
    ```
 
 ### Celery Permission Errors on Windows
@@ -82,8 +82,8 @@ celery -A app.workers.celery_app worker --loglevel=info --pool=solo
 
 **Solution:**
 ```powershell
-# Find process using port 8000
-netstat -ano | findstr :8000
+# Find process using port 8001
+netstat -ano | findstr :8001
 
 # Kill the process (replace PID with actual process ID)
 Stop-Process -Id <PID> -Force
@@ -119,7 +119,7 @@ Stop-Process -Name "node" -Force -ErrorAction SilentlyContinue
 # 2. Start backend
 cd "c:\Users\junai\Desktop\Major - Copy\backend"
 .venv\Scripts\activate
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 
 # 3. In a new terminal, start frontend
 cd "c:\Users\junai\Desktop\Major - Copy\frontend"
