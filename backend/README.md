@@ -4,7 +4,8 @@ Production-grade backend for the DeepClean AI Underwater Image Enhancer.
 
 ## Features
 - **FastAPI** for high-performance REST API
-- **PyTorch** for CycleGAN inference
+- **PyTorch** for CycleGAN and Restormer inference
+- **Moondream 2** for automated marine life detection
 - **Celery + Redis** for asynchronous background processing
 - **Docker** support for easy deployment
 
