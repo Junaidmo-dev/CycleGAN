@@ -51,3 +51,10 @@ Production-grade backend for the DeepClean AI Underwater Image Enhancer.
 
 Environment variables can be set in `.env` or passed to Docker.
 See `app/config.py` for available settings.
+
+## Diagnostics & Troubleshooting
+
+Use the provided scripts for system verification:
+- `python debug_gpu_fix.py`: Check GPU/VRAM availability and compatibility.
+- `python verify_detection.py`: Test Moondream detection inference.
+- `python verify_gpu.py`: Detailed PyTorch CUDA platform check.
