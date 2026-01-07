@@ -34,7 +34,7 @@ class RealESRGANService:
             tile=256,  # Use tiling for 4GB VRAM
             tile_pad=10,
             pre_pad=0,
-            half=True,  # FP16 for memory efficiency
+            half=True if torch.cuda.is_available() else False,  # FP16 only for CUDA
             device=self.device
         )
         
