@@ -21,3 +21,8 @@ accelerate==0.33.0
 peft==0.11.1
 protobuf
 scikit-image
+realesrgan
+basicsr
+opencv-python
+requests
+einops
